@@ -19,9 +19,18 @@ constexpr double radToDeg(double rad) {
     return rad * 180.0 / pi;
 }
 
+constexpr double twoPi = 2.0 * pi;
 constexpr double earthRadius = 6371000.0;
 constexpr double earthAngularVelocity = 7.2921159e-5;
 constexpr double earthMu = 3.986004418e14;
+
+double wrapLongitude(double lonRad) {
+    double wrapped = std::fmod(lonRad + pi, twoPi);
+    if (wrapped < 0.0) {
+        wrapped += twoPi;
+    }
+    return wrapped - pi;
+}
 } // namespace
 
 std::vector<LaunchSite> builtinLaunchSites() {
@@ -106,6 +115,7 @@ TrajectorySimulation::TrajectorySimulation(LaunchSite site,
                        initialHorizontal * std::sin(azimuthRad)};
 
     path_.push_back(state_.position);
+    groundTrack_.push_back({site_.latitudeDeg, site_.longitudeDeg});
     maxAltitude_ = state_.position.y;
     maxDownrange_ = state_.position.x;
 }
@@ -164,19 +174,23 @@ SimulationResult TrajectorySimulation::run() {
         maxAltitude_ = std::max(maxAltitude_, state_.position.y);
         maxDownrange_ = std::max(maxDownrange_, state_.position.x);
 
+        const LatLon groundPoint = computeGroundPoint(state_.position.x);
+        groundTrack_.push_back(groundPoint);
+
         TelemetryPoint telemetry = buildTelemetry(forces,
                                                   atmosphere,
                                                   pitchCommand,
                                                   flightPathAngle,
                                                   dragMagnitude,
-                                                  massAfter);
+                                                  massAfter,
+                                                  groundPoint);
         telemetry.mach = mach;
         telemetry.dynamicPressure = dynamicPressure;
         recordTelemetry(telemetry);
 
         renderAccumulator += dt;
         if (renderer && renderAccumulator >= settings_.renderInterval) {
-            renderer->render(path_, telemetry, site_, maxAltitude_, maxDownrange_, false);
+            renderer->render(path_, groundTrack_, telemetry, site_, maxAltitude_, maxDownrange_, false);
             renderAccumulator = 0.0;
         }
 
@@ -186,11 +200,12 @@ SimulationResult TrajectorySimulation::run() {
     }
 
     if (renderer && !telemetry_.empty()) {
-        renderer->render(path_, telemetry_.back(), site_, maxAltitude_, maxDownrange_, true);
+        renderer->render(path_, groundTrack_, telemetry_.back(), site_, maxAltitude_, maxDownrange_, true);
     }
 
     SimulationResult result;
     result.telemetry = telemetry_;
+    result.groundTrack = groundTrack_;
     result.maxAltitude = maxAltitude_;
     result.maxDownrange = maxDownrange_;
     return result;
@@ -205,11 +220,14 @@ TelemetryPoint TrajectorySimulation::buildTelemetry(const ForceReport& forces,
                                                     double pitchCommand,
                                                     double flightPathAngle,
                                                     double dragMagnitude,
-                                                    double vehicleMass) const {
+                                                    double vehicleMass,
+                                                    const LatLon& groundPoint) const {
     TelemetryPoint telemetry;
     telemetry.time = state_.time;
     telemetry.altitude = state_.position.y;
     telemetry.downrange = state_.position.x;
+    telemetry.latitude = groundPoint.latDeg;
+    telemetry.longitude = groundPoint.lonDeg;
     telemetry.speed = state_.velocity.norm();
     telemetry.pitchCommand = pitchCommand;
     telemetry.flightPathAngle = flightPathAngle;
@@ -219,4 +237,25 @@ TelemetryPoint TrajectorySimulation::buildTelemetry(const ForceReport& forces,
     telemetry.mass = vehicleMass;
     telemetry.stageName = forces.activeStageName;
     return telemetry;
+}
+
+LatLon TrajectorySimulation::computeGroundPoint(double downrangeMeters) const {
+    const double angularDistance = downrangeMeters / earthRadius;
+    const double bearing = degToRad(site_.launchAzimuthDeg);
+    const double lat1 = degToRad(site_.latitudeDeg);
+    const double lon1 = degToRad(site_.longitudeDeg);
+
+    const double sinLat1 = std::sin(lat1);
+    const double cosLat1 = std::cos(lat1);
+    const double sinAd = std::sin(angularDistance);
+    const double cosAd = std::cos(angularDistance);
+
+    const double sinLat2 = sinLat1 * cosAd + cosLat1 * sinAd * std::cos(bearing);
+    const double lat2 = std::asin(std::clamp(sinLat2, -1.0, 1.0));
+
+    const double y = std::sin(bearing) * sinAd * cosLat1;
+    const double x = cosAd - sinLat1 * std::sin(lat2);
+    const double lon2 = wrapLongitude(lon1 + std::atan2(y, x));
+
+    return LatLon{radToDeg(lat2), radToDeg(lon2)};
 }

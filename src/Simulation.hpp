@@ -11,6 +11,7 @@ class TrajectoryRenderer;
 
 struct SimulationResult {
     std::vector<TelemetryPoint> telemetry;
+    std::vector<LatLon> groundTrack;
     double maxAltitude = 0.0;
     double maxDownrange = 0.0;
 };
@@ -51,7 +52,10 @@ private:
                                   double pitchCommand,
                                   double flightPathAngle,
                                   double dragMagnitude,
-                                  double vehicleMass) const;
+                                  double vehicleMass,
+                                  const LatLon& groundPoint) const;
+
+    [[nodiscard]] LatLon computeGroundPoint(double downrangeMeters) const;
 
     LaunchSite site_;
     RocketVehicle rocket_;
@@ -59,6 +63,7 @@ private:
     AtmosphereModel atmosphere_;
     State state_;
     std::vector<Vector2> path_;
+    std::vector<LatLon> groundTrack_;
     std::vector<TelemetryPoint> telemetry_;
     double maxAltitude_ = 0.0;
     double maxDownrange_ = 0.0;

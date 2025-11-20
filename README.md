@@ -6,7 +6,7 @@
 - Multi-stage liquid engines with altitude-dependent thrust/ISP and propellant depletion
 - 2D translational dynamics with gravity losses, aerodynamic drag, and dynamic-pressure-aware throttling
 - An adaptive pitch program (vertical rise, gravity turn, rate-limited slew)
-- ASCII-based live visualization that renders the trajectory, max-Q statistics, and stage telemetry in real time
+- ASCII-based live visualization that renders the trajectory, max-Q statistics, stage telemetry, **and** a live Earth ground-track overlay derived from a procedurally-rendered planet map
 
 ## Building
 

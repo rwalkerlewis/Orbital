@@ -87,10 +87,17 @@ struct SimulationSettings {
     GuidanceSettings guidance;
 };
 
+struct LatLon {
+    double latDeg = 0.0;
+    double lonDeg = 0.0;
+};
+
 struct TelemetryPoint {
     double time = 0.0;
     double altitude = 0.0;
     double downrange = 0.0;
+    double latitude = 0.0;
+    double longitude = 0.0;
     double speed = 0.0;
     double pitchCommand = 90.0;
     double flightPathAngle = 90.0;
